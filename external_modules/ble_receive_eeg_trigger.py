@@ -38,9 +38,9 @@ import scipy.io as sio
 import configparser
 
 
-DEBUG_PRINT_ON = False
-LOG_ON = False
-DEBUG_ON = False
+DEBUG_PRINT_ON = True
+LOG_ON = True
+DEBUG_ON = True
 SAMPLES_PER_FRAME = 5
 TRIGGER_LENGTH = 1
 CH_NUM = 8 + 1        # 8个通道 + 1个trigger通道
@@ -80,6 +80,7 @@ class BleReceiver:
         self.logger.setLevel(logging.INFO)
         if not self.logger.handlers:
             if LOG_ON:
+                log_dir = os.path.dirname(self.log_file_path)
                 if log_dir and not os.path.exists(log_dir):
                     os.makedirs(log_dir, exist_ok=True)
                 file_handler = logging.FileHandler(self.log_file_path, mode='a')
@@ -103,8 +104,11 @@ class BleReceiver:
         self.m_devices = await BleakScanner.discover()
         if DEBUG_PRINT_ON:
             for dev in self.m_devices:
-                if dev.rssi > -70:
-                    print("\t-[", dev, dev.rssi, "]")
+                # 安全获取 rssi，如果不存在则默认为 -100
+                rssi = getattr(dev, 'rssi', -100)
+                if rssi is None: rssi = -100
+                if rssi > -70:
+                    print("\t-[", dev, rssi, "]")
 
     # 获取目标蓝牙mac地址
     def get_ble_mac_address(self):
@@ -193,6 +197,8 @@ class BleReceiver:
                 battery = data[136:138]
             # print(len(data))
             if LOG_ON:
+                # 强制记录每次接收的数据长度，以便排查
+                self.logger.info(f"Received BLE data len: {len(data)}")
                 if DEBUG_PRINT_ON:
                     self.logger.debug('have received buffer')
                     self.logger.debug('len: %d', len(data))
@@ -247,6 +253,9 @@ class BleReceiver:
                 # 得到的单帧数据raw_data_one_frame，一帧内有SAMPLES_PER_FRAME个采样点
                 # 得到的所有数据raw_data
                 # print('have received data')
+                if LOG_ON and g_data_counter % 100 == 0:
+                     self.logger.info(f"Pushing sample to LSL (Frame {g_data_counter})")
+
                 for j in range(raw_data_one_frame.shape[1]):
                     self.outlet.push_sample(raw_data_one_frame[:,j],timestamp = time.time())
                     # sio.savemat("raw_data.mat", {"rawData": raw_data_one_frame[:,j]})
@@ -255,10 +264,10 @@ class BleReceiver:
                 if DEBUG_ON and (g_data_counter >= 50):
                     # print('have received data')
                     # print(f"当前 MTU: {self.m_client.mtu_size}")
-                    try:
-                        print(int.from_bytes(battery, byteorder="big", signed=False))
-                    except:
-                        pass
+                    # try:
+                    #     print(int.from_bytes(battery, byteorder="big", signed=False))
+                    # except:
+                    #     pass
                     # print("140:",data[139])
                     # print("139:",data[138])
                     # print("138:",data[137])

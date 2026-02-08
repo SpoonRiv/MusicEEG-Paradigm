@@ -299,41 +299,41 @@ class MainWindow(QMainWindow):
         self.lyrics_window = LyricsWindow()
         self.lyrics_window.stop_signal.connect(self.on_experiment_aborted)
         
-        # 开始记录 EEG
-        if self.eeg_logger:
-            self.eeg_logger.start_recording()
-            
         self.lyrics_window.showFullScreen()
         
-        QTimer.singleShot(1000, self.play_next_song)
+        # 立即开始第一首歌的流程（准备阶段）
+        self.prepare_next_song()
 
-    def on_experiment_aborted(self):
-        """处理实验中断（用户按ESC）"""
-        logger.info("Experiment aborted by user (ESC pressed)")
-        self.play_timer.stop()
-        if pygame.mixer.music.get_busy():
-            pygame.mixer.music.stop()
-        self.is_playing = False
+    def prepare_next_song(self):
+        """每首歌之前的3秒准备阶段"""
+        if self.current_song_index >= len(self.current_playlist):
+            self.finish_experiment()
+            return
+
+        # 显示等待提示
+        self.lyrics_window.set_text("等待实验开始")
+        logger.info(f"Preparing song {self.current_song_index + 1}, waiting 3s...")
         
-        # 发送结束 Trigger (可选，保持数据完整性)
-        if self.ble_worker:
-            self.ble_worker.send_trigger(0xFF) # 使用 0xFF 标记中断
-            
-        # 停止记录 EEG
-        if self.eeg_logger:
-            self.eeg_logger.stop_recording()
+        # 3秒后开始播放
+        QTimer.singleShot(3000, self.start_song_playback)
 
-        self.show_message("中断", "实验已停止")
-
-    def play_next_song(self):
+    def start_song_playback(self):
+        """开始播放和录制"""
         if self.current_song_index >= len(self.current_playlist):
             self.finish_experiment()
             return
             
         song = self.current_playlist[self.current_song_index]
-        logger.info(f"Preparing to play: {song['name']} (ID: {song['id']})")
+        logger.info(f"Starting playback: {song['name']} (ID: {song['id']})")
         
-        # 1. 加载歌词
+        # 1. 开始单曲录制
+        # 文件名格式: Category_{id}_{name}
+        # 假设 ID 即为类别 (1-10)
+        filename = f"Category_{song['id']}_{song['name']}"
+        if self.eeg_logger:
+            self.eeg_logger.start_recording(filename)
+
+        # 2. 加载并显示歌词
         lyrics_text = f"正在播放: {song['name']}..."
         if song['lyrics_path']:
             try:
@@ -347,13 +347,13 @@ class MainWindow(QMainWindow):
             
         self.lyrics_window.set_text(lyrics_text)
         
-        # 2. 发送 Trigger
-        if self.ble_worker:
-            trigger_val = song['id']
-            self.ble_worker.send_trigger(trigger_val)
-            logger.info(f"Trigger sent: {trigger_val}")
+        # 3. 取消 Trigger 发送 (已注释)
+        # if self.ble_worker:
+        #     trigger_val = song['id']
+        #     self.ble_worker.send_trigger(trigger_val)
+        #     logger.info(f"Trigger sent: {trigger_val}")
         
-        # 3. 播放音乐
+        # 4. 播放音乐
         try:
             pygame.mixer.music.load(song['music_path'])
             pygame.mixer.music.play()
@@ -362,6 +362,24 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Failed to play music: {e}")
             self.finish_experiment()
+
+    def on_experiment_aborted(self):
+        """处理实验中断（用户按ESC）"""
+        logger.info("Experiment aborted by user (ESC pressed)")
+        self.play_timer.stop()
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.stop()
+        self.is_playing = False
+        
+        # 停止记录 EEG
+        if self.eeg_logger:
+            self.eeg_logger.stop_recording()
+
+        self.show_message("中断", "实验已停止")
+
+    def play_next_song(self):
+        """(Deprecated) 已被分解为 prepare_next_song 和 start_song_playback"""
+        pass
 
     def check_playback_status(self):
         if not pygame.mixer.music.get_busy() and self.is_playing:
@@ -372,16 +390,22 @@ class MainWindow(QMainWindow):
     def on_song_finished(self):
         logger.info(f"Song finished: {self.current_playlist[self.current_song_index]['name']}")
         
-        if self.ble_worker:
-            self.ble_worker.send_trigger(0xAA)
+        # 停止当前歌曲录制
+        if self.eeg_logger:
+            self.eeg_logger.stop_recording()
+            
+        # 取消结束 Trigger
+        # if self.ble_worker:
+        #     self.ble_worker.send_trigger(0xAA)
         
         self.current_song_index += 1
-        QTimer.singleShot(2000, self.play_next_song)
+        # 立即进入下一首歌的准备阶段（不需额外等待，因为 prepare_next_song 里有3s等待）
+        self.prepare_next_song()
 
     def finish_experiment(self):
         logger.info("Experiment finished")
         
-        # 停止记录 EEG
+        # 确保录制已停止
         if self.eeg_logger:
             self.eeg_logger.stop_recording()
             

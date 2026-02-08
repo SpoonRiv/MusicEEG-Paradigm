@@ -65,7 +65,43 @@ class BLEWorker(QThread):
 
             # 启动接收任务
             self.status_changed.emit("已连接，正在接收数据...")
-            self.loop.run_until_complete(self.receiver.start_notification())
+            
+            # 定义主任务，并发执行接收和初始化指令
+            async def ble_main_task():
+                # 启动接收任务 (这会阻塞直到 event 被 set)
+                # 使用 create_task 让它在后台运行
+                recv_task = asyncio.create_task(self.receiver.start_notification())
+                
+                # 等待连接建立
+                # start_notification 内部会建立连接并赋值给 self.receiver.m_client
+                max_retries = 50
+                for _ in range(max_retries):
+                    if self.receiver.m_client and self.receiver.m_client.is_connected:
+                        break
+                    await asyncio.sleep(0.2)
+                
+                if self.receiver.m_client and self.receiver.m_client.is_connected:
+                    self.status_changed.emit("正在发送初始化指令...")
+                    logger.info("Sending initialization commands...")
+                    try:
+                        # 参考 xw_web_C8.py / ble_receive_eeg_trigger.py 的初始化序列
+                        # command_data = bytearray([0x02, 0x02])
+                        await self.receiver.send_control_command(bytearray([0x02, 0x02]))
+                        await asyncio.sleep(0.5)
+                        
+                        # command_data = bytearray([0x02, 0x01])
+                        await self.receiver.send_control_command(bytearray([0x02, 0x01]))
+                        logger.info("Initialization commands sent successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to send init commands: {e}")
+                        self.status_changed.emit(f"初始化指令发送失败: {e}")
+                else:
+                    logger.warning("Timeout waiting for BLE connection ready")
+
+                # 等待接收任务结束
+                await recv_task
+
+            self.loop.run_until_complete(ble_main_task())
             
         except Exception as e:
             logger.error(f"BLE Error: {e}")
