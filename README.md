@@ -1,6 +1,8 @@
 # Music-EEG Multimodal Experiment Paradigm
 # 音乐-脑电多模态实验范式上位机
 
+![程序主界面截图](screenshot.png)
+
 ## 📖 项目简介
 本项目是一个用于采集音乐收听过程中脑电（EEG）信号的上位机实验程序。程序能够同步播放音乐、全屏展示歌词，并通过蓝牙（BLE）实时采集便携式 EEG 设备的信号，最终将数据保存为 CSV 文件供后续分析使用。
 
