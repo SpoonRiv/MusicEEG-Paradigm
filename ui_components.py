@@ -37,14 +37,6 @@ class SongCard(QFrame):
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # 序号 (用户要求去掉点击后的数字，这里选择直接不显示序号以保持简洁，或者如果用户是指选中状态下的数字，那么上面的 styles.py 已经去掉了选中状态的边框)
-        # 根据需求“去掉点击后的数字”，可能是指去掉这个大大的数字显示，让卡片更纯粹。
-        # 这里我注释掉序号显示。
-        # self.lbl_id = QLabel(f"{self.song_data['id']}")
-        # self.lbl_id.setFont(QFont("Microsoft YaHei", 24, QFont.Weight.Bold))
-        # self.lbl_id.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # layout.addWidget(self.lbl_id)
-        
         # 歌名
         self.lbl_name = QLabel(self.song_data['name'])
         # 使用样式表设置字体，以避免被父控件的样式表覆盖，且不设置颜色以便继承父控件的颜色变化

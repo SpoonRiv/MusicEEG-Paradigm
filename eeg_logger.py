@@ -14,7 +14,6 @@ class EEGLogger:
         self.base_dir = base_dir
         self.save_path = None
         self.is_recording = False
-        self.stop_requested = False # 新增停止请求标志
         self.stop_event = threading.Event()
         self.data_lock = threading.Lock() # 数据访问锁
         self.current_filename = "EEG_data" # 默认文件名
@@ -39,18 +38,10 @@ class EEGLogger:
             logger.warning("Recording already in progress, restarting...")
             self.stop_recording()
             
-        # 清空 inlet 中残留的旧数据，确保录制从当下开始
-        if self.inlet:
-            try:
-                self.inlet.pull_chunk(timeout=0.0)
-            except:
-                pass
-
         with self.data_lock:
             self.current_filename = filename
             self.buffer = [] # 清空缓存
             self.is_recording = True
-            self.stop_requested = False
             self.start_time = time.time() # 记录开始时间
         
         if self.inlet is None:
@@ -59,14 +50,35 @@ class EEGLogger:
         logger.info(f"EEG recording started for: {filename}")
 
     def stop_recording(self):
-        """发送停止录制请求，实际停止和保存由后台线程执行，确保不丢数据"""
+        """停止录制并异步保存文件 (线程安全)"""
+        data_to_save = []
+        duration = 0
+        save_filename = ""
+
         with self.data_lock:
             if not self.is_recording:
                 return
-            logger.info("Requesting stop recording...")
-            self.stop_requested = True
-            # 注意：不立即设为 False，等待后台线程处理最后一批数据
-
+                
+            logger.info("Stopping EEG recording...")
+            self.is_recording = False
+            duration = time.time() - self.start_time
+            save_filename = self.current_filename
+            
+            # 获取数据副本
+            if self.buffer:
+                data_to_save = list(self.buffer)
+                self.buffer = [] # 立即清空
+        
+        # 异步保存数据，不阻塞主线程
+        if data_to_save:
+            threading.Thread(
+                target=self._save_to_file,
+                args=(data_to_save, duration, save_filename)
+            ).start()
+        else:
+            logger.warning("No data recorded to save.")
+            
+        logger.info("EEG recording stopped (Save task submitted)")
 
     def _bg_loop(self):
         """后台持续采集线程"""
@@ -94,46 +106,10 @@ class EEGLogger:
             try:
                 # timeout设为较小值，保证循环响应速度
                 chunk, timestamps = self.inlet.pull_chunk(timeout=0.2)
-                
-                # 无论是否有数据，都要检查是否需要停止，防止丢失最后一次的数据
-                # 如果有数据，先存入
                 if chunk:
                     with self.data_lock:
                         if self.is_recording:
                             self.buffer.extend(chunk)
-                
-                # 检查是否请求停止
-                # 必须在处理完 chunk 之后检查
-                stop_action_needed = False
-                data_to_save = []
-                duration = 0
-                save_filename = ""
-                
-                with self.data_lock:
-                    if self.is_recording and self.stop_requested:
-                        # 执行停止逻辑
-                        logger.info("Background thread handling stop request...")
-                        self.is_recording = False
-                        self.stop_requested = False
-                        stop_action_needed = True
-                        duration = time.time() - self.start_time
-                        save_filename = self.current_filename
-                        if self.buffer:
-                            data_to_save = list(self.buffer)
-                            self.buffer = []
-
-                # 如果需要保存，在锁外执行（或者是启动新线程，避免阻塞 loop）
-                if stop_action_needed:
-                    if data_to_save:
-                        # 启动线程保存，让 loop 继续跑（虽然 loop 接下来只是空转等待下次 start）
-                        threading.Thread(
-                            target=self._save_to_file,
-                            args=(data_to_save, duration, save_filename)
-                        ).start()
-                    else:
-                        logger.warning("No data recorded to save.")
-                    logger.info("EEG recording fully stopped.")
-                    
             except Exception as e:
                 logger.error(f"Error pulling data: {e}")
                 self.inlet = None # 触发重连

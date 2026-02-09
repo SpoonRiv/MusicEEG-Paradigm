@@ -12,7 +12,6 @@ from typing import Optional
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-# 尝试导入 BleReceiver
 try:
     from external_modules.ble_receive_eeg_trigger import BleReceiver
 except ImportError:
@@ -84,12 +83,9 @@ class BLEWorker(QThread):
                     self.status_changed.emit("正在发送初始化指令...")
                     logger.info("Sending initialization commands...")
                     try:
-                        # 参考 xw_web_C8.py / ble_receive_eeg_trigger.py 的初始化序列
-                        # command_data = bytearray([0x02, 0x02])
                         await self.receiver.send_control_command(bytearray([0x02, 0x02]))
                         await asyncio.sleep(0.5)
                         
-                        # command_data = bytearray([0x02, 0x01])
                         await self.receiver.send_control_command(bytearray([0x02, 0x01]))
                         logger.info("Initialization commands sent successfully")
                     except Exception as e:

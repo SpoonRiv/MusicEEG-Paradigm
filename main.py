@@ -30,9 +30,7 @@ from eeg_logger import EEGLogger
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='experiment_log.txt',
-    filemode='a'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("Main")
 
@@ -62,6 +60,14 @@ class MainWindow(QMainWindow):
         self.is_playing = False
         self.ble_worker = None
         self.eeg_logger = EEGLogger(self.base_dir)
+        
+        # 配置日志文件输出到实验文件夹
+        if self.eeg_logger.save_path:
+            log_file_path = os.path.join(self.eeg_logger.save_path, 'experiment_log.txt')
+            file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+            file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+            logging.getLogger().addHandler(file_handler)
+            logger.info(f"Log file moved to: {log_file_path}")
         
         # 应用样式
         self.setStyleSheet(styles.MAIN_STYLESHEET)
@@ -162,19 +168,12 @@ class MainWindow(QMainWindow):
         self.btn_deselect_all.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_deselect_all.clicked.connect(self.deselect_all_songs)
         
-        # toolbar.addWidget(QLabel("实验歌单选择")) # 用户要求去除字样
         toolbar.addStretch()
         toolbar.addWidget(self.btn_select_all)
         toolbar.addWidget(self.btn_deselect_all)
         
         right_layout.addLayout(toolbar)
-        
-        # 歌曲网格
-        # 用户要求：主窗口打开不要折叠内容，要一次性平铺所有的按钮
-        # 移除 QScrollArea，直接使用 QWidget 容器，或者让 ScrollArea 足够大且无滚动条
-        # 为了保险起见，保留 grid_container 但直接放入布局，或者使用 ScrollArea 但确保它扩展
-        
-        # 修改方案：直接将 grid_container 放入 right_layout，并设置 stretch
+
         grid_container = QWidget()
         self.grid_layout = QGridLayout(grid_container)
         self.grid_layout.setSpacing(20)
@@ -182,15 +181,6 @@ class MainWindow(QMainWindow):
         
         # 将 grid_container 放入右侧布局，并给予最大比例
         right_layout.addWidget(grid_container, 1) # stretch=1
-        
-        # 移除 ScrollArea 相关代码
-        # scroll = QScrollArea()
-        # scroll.setWidgetResizable(True)
-        # scroll.setFrameShape(QFrame.Shape.NoFrame)
-        # scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        # scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        # scroll.setWidget(grid_container)
-        # right_layout.addWidget(scroll)
         
         main_layout.addWidget(right_panel, 1) # 让右侧区域占据更多空间
 
@@ -210,7 +200,6 @@ class MainWindow(QMainWindow):
         self.song_cards.clear()
         
         # 加载新卡片
-        # 用户要求：把现在5*2的列表转置成2*5
         columns = 2 # 2列
         for idx, filename in enumerate(mp3_files):
             name = os.path.splitext(filename)[0]
@@ -262,7 +251,9 @@ class MainWindow(QMainWindow):
         self.btn_connect.setEnabled(False)
         self.lbl_status.setText("正在连接...")
         
-        self.ble_worker = BLEWorker(device_name, self.base_dir)
+        # 使用实验文件夹作为日志路径
+        log_path = self.eeg_logger.save_path if self.eeg_logger and self.eeg_logger.save_path else self.base_dir
+        self.ble_worker = BLEWorker(device_name, log_path)
         self.ble_worker.status_changed.connect(self.update_status)
         self.ble_worker.connection_success.connect(self.on_connection_result)
         self.ble_worker.start()
@@ -346,13 +337,7 @@ class MainWindow(QMainWindow):
             
         self.lyrics_window.set_text(lyrics_text)
         
-        # 3. 取消 Trigger 发送 (已注释)
-        # if self.ble_worker:
-        #     trigger_val = song['id']
-        #     self.ble_worker.send_trigger(trigger_val)
-        #     logger.info(f"Trigger sent: {trigger_val}")
-        
-        # 4. 播放音乐
+        # 3. 播放音乐
         try:
             pygame.mixer.music.load(song['music_path'])
             pygame.mixer.music.play()
@@ -392,10 +377,6 @@ class MainWindow(QMainWindow):
         # 立即停止录制 (与音乐结束对齐)
         if self.eeg_logger:
             self.eeg_logger.stop_recording()
-            
-        # 取消结束 Trigger
-        # if self.ble_worker:
-        #     self.ble_worker.send_trigger(0xAA)
         
         self.current_song_index += 1
         # 立即进入下一首歌的准备阶段
