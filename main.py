@@ -314,7 +314,7 @@ class MainWindow(QMainWindow):
         self.lyrics_window.set_text("等待实验开始")
         logger.info(f"Preparing song {self.current_song_index + 1}, waiting 3s...")
         
-        # 3秒后开始播放
+        # 3.0秒后开始播放音乐
         QTimer.singleShot(3000, self.start_song_playback)
 
     def start_song_playback(self):
@@ -328,7 +328,6 @@ class MainWindow(QMainWindow):
         
         # 1. 开始单曲录制
         # 文件名格式: Category_{id}_{name}
-        # 假设 ID 即为类别 (1-10)
         filename = f"Category_{song['id']}_{song['name']}"
         if self.eeg_logger:
             self.eeg_logger.start_recording(filename)
@@ -390,7 +389,7 @@ class MainWindow(QMainWindow):
     def on_song_finished(self):
         logger.info(f"Song finished: {self.current_playlist[self.current_song_index]['name']}")
         
-        # 停止当前歌曲录制
+        # 立即停止录制 (与音乐结束对齐)
         if self.eeg_logger:
             self.eeg_logger.stop_recording()
             
@@ -399,8 +398,13 @@ class MainWindow(QMainWindow):
         #     self.ble_worker.send_trigger(0xAA)
         
         self.current_song_index += 1
-        # 立即进入下一首歌的准备阶段（不需额外等待，因为 prepare_next_song 里有3s等待）
+        # 立即进入下一首歌的准备阶段
         self.prepare_next_song()
+
+    def stop_recording_delayed(self):
+        """延迟停止录制"""
+        if self.eeg_logger:
+            self.eeg_logger.stop_recording()
 
     def finish_experiment(self):
         logger.info("Experiment finished")

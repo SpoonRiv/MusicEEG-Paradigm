@@ -168,12 +168,12 @@ class BleReceiver:
                 #     for char in service.characteristics:
                 #         props = ",".join(char.properties)
                 #         print(f"  [Characteristic] {char.uuid} | Handle: {char.handle} | Props: [{props}]")
-                if DEBUG_PRINT_ON:
-                    print("BCI_BLE Services:")
-                    for service in self.m_client_serv:
-                        print("\t", service)
-                        for char in service.characteristics:
-                            print("\t\t", char)
+                # if DEBUG_PRINT_ON:
+                #     print("BCI_BLE Services:")
+                #     for service in self.m_client_serv:
+                #         print("\t", service)
+                #         for char in service.characteristics:
+                #             print("\t\t", char)
                 self.event = asyncio.Event()
                 await self.m_client.start_notify(5, self.notification_handler)
                 # await self.m_client.start_notify(42, self.notification_handler)
