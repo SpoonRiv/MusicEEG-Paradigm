@@ -9,15 +9,7 @@ Version: 1.2.2
 Description: 
     蓝牙EEG数据接收模块，用于实时采集和保存EEG设备数据及trigger信号
 Change Log:
-    1.2.2: 2026-02-06: Zhao Jinhao Corrected. 修改了log输出默认关闭，需DEBUG_PRINT_ON=True开启
-    1.2.1: 2026-01-27: Zhao Jinhao Corrected. 新增电量显示
-    1.2.0: 2025-11-25: Zhao Jinhao Corrected. 过滤异常值，如果收到包长度140，清空缓存，防止错位
-    1.1.4: 2025-11-25: Zhao Jinhao Corrected. 新增写日志功能，可在上位机开启LOG_ON，默认关闭
-    1.1.3: 2025-11-14: Zhao Jinhao Corrected. 修bug
-    1.1.2: 2025-10-15: Jia Wenji Corrected. 新增16导模式
-    1.1.1: 2025-05-27: Zhao Jinhao Corrected. 添加if name == main
-    1.1.0: 2025-05-11: Zhao Jinhao Corrected. 新增配置文件读取指定名称的BLE，添加重联机制
-    1.0.0: 2025-03-10: 从线程启动改为独立启动，新增Socket通信接收trigger（原v2）
+     当前项目在1.2.2版本基础上修改
 """
 
 import asyncio
