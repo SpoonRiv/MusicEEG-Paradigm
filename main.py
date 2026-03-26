@@ -12,9 +12,10 @@ from typing import List
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QLineEdit, QMessageBox, QGroupBox, QGridLayout,
-    QScrollArea, QFrame, QSizePolicy
+    QScrollArea, QFrame, QSizePolicy, QComboBox
 )
 from PyQt6.QtCore import Qt, QTimer
+import configparser
 from PyQt6.QtGui import QPixmap, QIcon
 
 # 导入 pygame 用于音频播放
@@ -119,9 +120,27 @@ class MainWindow(QMainWindow):
         dev_layout = QVBoxLayout()
         dev_layout.setSpacing(10)
         dev_layout.addWidget(QLabel("蓝牙设备名称"))
-        self.device_input = QLineEdit("MSM")
-        self.device_input.setPlaceholderText("输入设备名...")
-        dev_layout.addWidget(self.device_input)
+        
+        # 使用下拉框替代输入框，并允许手动输入
+        self.device_combo = QComboBox()
+        self.device_combo.setObjectName("device_combo")
+        self.device_combo.setEditable(True) # 允许手动输入
+        
+        # 从配置文件读取设备列表
+        config = configparser.ConfigParser()
+        config_path = os.path.join(self.base_dir, 'external_modules', 'BHBconfig.ini')
+        device_names = ["MSM"] # 默认后备值
+        if os.path.exists(config_path):
+            try:
+                config.read(config_path, encoding='utf-8')
+                names_str = config.get("Bluetooth", "bci_ble_name")
+                device_names = [name.strip() for name in names_str.split(',')]
+            except Exception as e:
+                logger.error(f"Failed to read config: {e}")
+                
+        self.device_combo.addItems(device_names)
+        
+        dev_layout.addWidget(self.device_combo)
         control_layout.addLayout(dev_layout)
         
         self.btn_connect = QPushButton("连接设备")
@@ -243,9 +262,9 @@ class MainWindow(QMainWindow):
         msg.exec()
 
     def connect_ble(self):
-        device_name = self.device_input.text().strip()
+        device_name = self.device_combo.currentText().strip()
         if not device_name:
-            self.show_message("错误", "请输入设备名称", is_error=True)
+            self.show_message("错误", "请选择设备名称", is_error=True)
             return
             
         self.btn_connect.setEnabled(False)
