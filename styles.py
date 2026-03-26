@@ -102,6 +102,80 @@ MAIN_STYLESHEET = f"""
         border: 2px solid {COLOR_ACCENT};
     }}
 
+    /* 下拉选择框 QComboBox */
+    QComboBox {{
+        background-color: {COLOR_PANEL};
+        border: 2px solid {COLOR_BORDER};
+        border-radius: 6px;
+        padding: 12px;
+        color: {COLOR_TEXT_PRIMARY};
+        font-family: "{FONT_FAMILY}";
+        font-size: 16px;
+    }}
+    QComboBox:focus {{
+        border: 2px solid {COLOR_ACCENT};
+    }}
+    /* 可编辑状态下的输入框部分 */
+    QComboBox QLineEdit {{
+        background-color: transparent;
+        border: none;
+        color: {COLOR_TEXT_PRIMARY};
+        selection-background-color: {COLOR_ACCENT};
+        selection-color: #000000;
+    }}
+    QComboBox::drop-down {{
+        subcontrol-origin: padding;
+        subcontrol-position: top right;
+        width: 35px;
+        /* 给下拉按钮区域一个稍微不同的背景色和左边框以示区分 */
+        background-color: {COLOR_BACKGROUND}; 
+        border-left: 1px solid {COLOR_BORDER};
+        border-top-right-radius: 4px;
+        border-bottom-right-radius: 4px;
+    }}
+    QComboBox::drop-down:hover {{
+        background-color: #383838; /* 悬停时稍微变亮 */
+    }}
+    /* 使用纯色边框技巧绘制一个白色的倒三角 */
+    QComboBox::down-arrow {{
+        width: 0; 
+        height: 0; 
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 7px solid #FFFFFF; /* 白色倒三角 */
+    }}
+    QComboBox::down-arrow:on {{
+        /* 展开时箭头可以稍微移动或变色，这里保持白色 */
+        top: 1px;
+    }}
+    /* 下拉列表弹窗面板背景 */
+    QComboBox QAbstractItemView {{
+        background-color: {COLOR_BACKGROUND}; /* 改为最深色背景 */
+        border: 1px solid {COLOR_BORDER};
+        color: {COLOR_TEXT_PRIMARY};
+        selection-background-color: {COLOR_ACCENT};
+        selection-color: #000000;
+        outline: none;
+    }}
+    
+    /* 滚动条整体样式 */
+    QScrollBar:vertical {{
+        background: {COLOR_BACKGROUND};
+        width: 12px;
+        margin: 0px;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {COLOR_BORDER};
+        min-height: 20px;
+        border-radius: 6px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {COLOR_ACCENT};
+    }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+        height: 0px;
+    }}
+
     /* 标签 */
     QLabel {{
         color: {COLOR_TEXT_PRIMARY}; /* 全部白色 */

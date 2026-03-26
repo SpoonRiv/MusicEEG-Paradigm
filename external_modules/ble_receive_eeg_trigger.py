@@ -92,8 +92,10 @@ class BleReceiver:
 
     def read_config(self):
         config = configparser.ConfigParser()
-        config_name='external_modules/BHBconfig.ini'
-        config.read(config_name, encoding='utf - 8')
+        config_name = os.path.join(os.path.dirname(__file__), 'BHBconfig.ini')
+        if not os.path.exists(config_name):
+            config_name = 'external_modules/BHBconfig.ini'
+        config.read(config_name, encoding='utf-8')
         names_str = config.get("Bluetooth",'bci_ble_name')
         return [name.strip() for name in names_str.split(',')]
 
@@ -175,8 +177,14 @@ class BleReceiver:
                 #         for char in service.characteristics:
                 #             print("\t\t", char)
                 self.event = asyncio.Event()
-                await self.m_client.start_notify(5, self.notification_handler)
-                # await self.m_client.start_notify(42, self.notification_handler)
+                is_ble = "ble" in self.m_device_name.lower()
+                is_msm = "msm" in self.m_device_name.lower()
+                
+                if is_ble and not is_msm:
+                    await self.m_client.start_notify(42, self.notification_handler)
+                else:
+                    await self.m_client.start_notify(5, self.notification_handler)
+                
                 await self.event.wait()  # 持续接收数据，直到进程终止
         except Exception as e:
             if DEBUG_PRINT_ON:
@@ -190,11 +198,21 @@ class BleReceiver:
     async def notification_handler(self, sender, data):
         global g_data_counter, g_timer_begin, g_timer_end, raw_data
         if self.is_receiving:
-            head_len = 3
-            if self.channel_num == 8:
-                data_length = 140
-                single_frame = 24
-                battery = data[136:138]
+            is_ble = "ble" in self.m_device_name.lower()
+            is_msm = "msm" in self.m_device_name.lower()
+            
+            if is_ble and not is_msm:
+                head_len = 2
+                if self.channel_num == 8:
+                    data_length = 144
+                    single_frame = 24
+                    battery_slice = slice(138, 140)
+            else:
+                head_len = 3
+                if self.channel_num == 8:
+                    data_length = 140
+                    single_frame = 24
+                    battery_slice = slice(136, 138)
             # print(len(data))
             if LOG_ON:
                 # 强制记录每次接收的数据长度，以便排查
@@ -215,12 +233,15 @@ class BleReceiver:
                 # print(order)
                 # print(int.from_bytes(order, byteorder="little", signed=False))
                 data_eeg = data[head_len: head_len + single_frame * SAMPLES_PER_FRAME]
-                data_trigger = data[head_len + single_frame * SAMPLES_PER_FRAME: head_len + single_frame * SAMPLES_PER_FRAME + TRIGGER_LENGTH]
+                if is_ble and not is_msm:
+                    data_trigger = data[head_len + single_frame * SAMPLES_PER_FRAME: head_len + single_frame * SAMPLES_PER_FRAME + SAMPLES_PER_FRAME]
+                else:
+                    data_trigger = data[head_len + single_frame * SAMPLES_PER_FRAME: head_len + single_frame * SAMPLES_PER_FRAME + TRIGGER_LENGTH]
                 
                 # 解析电量
                 if self.battery_queue is not None and g_data_counter % 50 == 0:
                     try:
-                        battery_bytes = data[136:138]
+                        battery_bytes = data[battery_slice]
                         battery_level = int.from_bytes(battery_bytes, byteorder="big", signed=False)
                         # print("电量:",battery_level)
                         # 使用非阻塞方式放入队列，防止队列满时阻塞
@@ -242,8 +263,10 @@ class BleReceiver:
                         raw_data_one_frame[ch_idx][frame_idx] = int.from_bytes(data_eeg[(3 * ch_idx + single_frame * frame_idx):
                                                                                         (3 * ch_idx + single_frame * frame_idx + 3)],
                                                                                         byteorder="big", signed=True)
-                    # raw_data_one_frame[8][frame_idx] = int.from_bytes(data_trigger[frame_idx: frame_idx + 1], byteorder="big", signed=False)
-                    raw_data_one_frame[self.channel_num][frame_idx] = int.from_bytes(data_trigger, byteorder="big", signed=False)
+                    if is_ble and not is_msm:
+                        raw_data_one_frame[self.channel_num][frame_idx] = int.from_bytes(data_trigger[frame_idx: frame_idx + 1], byteorder="big", signed=False)
+                    else:
+                        raw_data_one_frame[self.channel_num][frame_idx] = int.from_bytes(data_trigger, byteorder="big", signed=False)
                     # raw_data_one_frame[9][frame_idx] = Frame_header_A
                     # raw_data_one_frame[10][frame_idx] = Frame_header_B
                     # raw_data_one_frame[11][frame_idx] = len(data)
@@ -257,7 +280,17 @@ class BleReceiver:
                      self.logger.info(f"Pushing sample to LSL (Frame {g_data_counter})")
 
                 for j in range(raw_data_one_frame.shape[1]):
-                    self.outlet.push_sample(raw_data_one_frame[:,j],timestamp = time.time())
+                    # 必须确保传递给 push_sample 的列表元素都是标准 Python float 或 int 类型
+                    # 避免 LSL 底层因 numpy 数据类型报错而导致推流静默失败
+                    sample_list = []
+                    for i in range(raw_data_one_frame.shape[0]):
+                        sample_list.append(float(raw_data_one_frame[i, j]))
+                        
+                    try:
+                        self.outlet.push_sample(sample_list, timestamp=time.time())
+                    except Exception as push_err:
+                        if LOG_ON:
+                            self.logger.error(f"LSL Push Error: {push_err}")
                     # sio.savemat("raw_data.mat", {"rawData": raw_data_one_frame[:,j]})
                 # raw_data = np.concatenate((raw_data, raw_data_one_frame), axis=1)
                 # t = 0
@@ -286,8 +319,10 @@ class BleReceiver:
 
     def read_config_CHlen(self):
         config = configparser.ConfigParser()
-        config_name='external_modules/BHBconfig.ini'
-        config.read(config_name, encoding='utf - 8')
+        config_name = os.path.join(os.path.dirname(__file__), 'BHBconfig.ini')
+        if not os.path.exists(config_name):
+            config_name = 'external_modules/BHBconfig.ini'
+        config.read(config_name, encoding='utf-8')
         channel_names = eval(config['Channel']['channel_names'])
         return len(channel_names)
 
@@ -353,8 +388,13 @@ class BleReceiver:
         if self.m_client and self.m_client.is_connected:
             if DEBUG_PRINT_ON:
                 print(f"Sending control command char 40: {command_data}")
-            await self.m_client.write_gatt_char(8, command_data)
-            # await self.m_client.write_gatt_char(40, command_data)
+            is_ble = "ble" in self.m_device_name.lower()
+            is_msm = "msm" in self.m_device_name.lower()
+            
+            if is_ble and not is_msm:
+                await self.m_client.write_gatt_char(40, command_data)
+            else:
+                await self.m_client.write_gatt_char(8, command_data)
 
     def run_async(self, coro):
         """在子线程中运行异步协程"""
